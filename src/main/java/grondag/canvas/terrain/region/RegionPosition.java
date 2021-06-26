@@ -20,6 +20,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
 import grondag.bitraster.PackedBox;
+import grondag.canvas.pipeline.Pipeline;
 import grondag.canvas.terrain.occlusion.TerrainOccluder;
 
 public class RegionPosition extends BlockPos {
@@ -32,8 +33,7 @@ public class RegionPosition extends BlockPos {
 	 */
 	private final int chunkY;
 
-	/**  See {@link RenderRegionStorage#cameraRegionVersion()}. */
-	private int cameraRegionVersion = -1;
+	private long cameraRegionOrigin = -1;
 
 	/** Tracks the version of the camera occluder view transform to know when we must recompute dependent values. */
 	private int cameraOccluderViewVersion = -1;
@@ -69,6 +69,9 @@ public class RegionPosition extends BlockPos {
 	/** See {@link #checkAndUpdateSortNeeded(int)}. */
 	private int sortPositionVersion = -1;
 
+	/** Concatenated bit flags marking the shadow cascades that include this region. */
+	private int shadowCascadeFlags;
+
 	public RegionPosition(long packedPos, RenderRegion owner) {
 		super(unpackLongX(packedPos), unpackLongY(packedPos), unpackLongZ(packedPos));
 		this.owner = owner;
@@ -78,14 +81,15 @@ public class RegionPosition extends BlockPos {
 	public void update() {
 		computeRegionDependentValues();
 		computeViewDependentValues();
+		shadowCascadeFlags = Pipeline.shadowsEnabled() ? owner.cwr.terrainIterator.shadowOccluder.cascadeFlags(this) : 0;
 	}
 
 	private void computeRegionDependentValues() {
-		final int cameraRegionVersion = owner.renderChunk.cameraRegionVersion();
+		final long cameraRegionOrigin = owner.cwr.terrainIterator.cameraRegionOrigin();
 
-		if (this.cameraRegionVersion != cameraRegionVersion) {
-			this.cameraRegionVersion = cameraRegionVersion;
-			final int cy = owner.storage.cameraChunkY() - chunkY;
+		if (this.cameraRegionOrigin != cameraRegionOrigin) {
+			this.cameraRegionOrigin = cameraRegionOrigin;
+			final int cy = (BlockPos.unpackLongY(cameraRegionOrigin) >> 4) - chunkY;
 			squaredCameraChunkDistance = owner.renderChunk.horizontalSquaredDistance + cy * cy;
 			isInsideRenderDistance = squaredCameraChunkDistance <= owner.cwr.maxSquaredChunkRenderDistance();
 			isNear = squaredCameraChunkDistance <= 3;
@@ -130,7 +134,7 @@ public class RegionPosition extends BlockPos {
 		isNear = false;
 		cameraOccluderPositionVersion = -1;
 		cameraOccluderViewVersion = -1;
-		cameraRegionVersion = -1;
+		cameraRegionOrigin = -1;
 		isPotentiallyVisibleFromCamera = false;
 	}
 
@@ -220,5 +224,13 @@ public class RegionPosition extends BlockPos {
 	/** For debugging. */
 	public boolean sharesOriginWith(int blockX, int blockY, int blockZ) {
 		return getX() >> 4 == blockX >> 4 && getY() >> 4 == blockY >> 4 && getZ() >> 4 == blockZ >> 4;
+	}
+
+	public int shadowCascadeFlags() {
+		return shadowCascadeFlags;
+	}
+
+	public boolean isPotentiallyVisibleFromSkylight() {
+		return owner.origin.isInsideRenderDistance() & shadowCascadeFlags != 0;
 	}
 }

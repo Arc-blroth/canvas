@@ -17,6 +17,7 @@
 package grondag.canvas.terrain.region;
 
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.chunk.ChunkStatus;
 
 public class RenderChunk {
@@ -27,8 +28,7 @@ public class RenderChunk {
 	private RenderRegion[] regions = null;
 	private boolean areCornersLoadedCache = false;
 
-	/**  See {@link RenderRegionStorage#cameraRegionVersion()}. */
-	private int cameraRegionVersion = -1;
+	private long cameraRegionOrigin = -1;
 
 	int horizontalSquaredDistance;
 
@@ -41,7 +41,7 @@ public class RenderChunk {
 		this.chunkZ = chunkZ;
 		regions = new RenderRegion[RenderRegionIndexer.MAX_Y_REGIONS];
 		areCornersLoadedCache = false;
-		cameraRegionVersion = -1;
+		cameraRegionOrigin = -1;
 		computeChunkDistanceMetrics();
 	}
 
@@ -95,12 +95,12 @@ public class RenderChunk {
 	}
 
 	private void computeChunkDistanceMetrics() {
-		final int cameraRegionVersion = storage.cameraRegionVersion();
+		final long cameraRegionOrigin = storage.cwr.terrainIterator.cameraRegionOrigin();
 
-		if (this.cameraRegionVersion != cameraRegionVersion) {
-			this.cameraRegionVersion = cameraRegionVersion;
-			final int cx = storage.cameraChunkX() - chunkX;
-			final int cz = storage.cameraChunkZ() - chunkZ;
+		if (this.cameraRegionOrigin != cameraRegionOrigin) {
+			this.cameraRegionOrigin = cameraRegionOrigin;
+			final int cx = (BlockPos.unpackLongX(cameraRegionOrigin) >> 4) - chunkX;
+			final int cz = (BlockPos.unpackLongZ(cameraRegionOrigin) >> 4) - chunkZ;
 			horizontalSquaredDistance = cx * cx + cz * cz;
 		}
 	}
@@ -141,8 +141,7 @@ public class RenderChunk {
 		return regions == null ? null : regions[i];
 	}
 
-	/**  See {@link RenderRegionStorage#cameraRegionVersion()}. */
-	public int cameraRegionVersion() {
-		return cameraRegionVersion;
+	public long cameraRegionOrigin() {
+		return cameraRegionOrigin;
 	}
 }
